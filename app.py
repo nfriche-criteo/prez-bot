@@ -3,6 +3,7 @@ import sys
 import re
 import json
 import logging
+import unicodedata
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional
 
@@ -14,33 +15,32 @@ import yaml
 import random
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
-import unicodedata
 
 # --------- Required environment variables (set as GitHub Secrets) ----------
-CONFLUENCE_BASE_URL = os.environ.get("CONFLUENCE_BASE_URL")   # e.g. https://your-domain.atlassian.net/wiki
-CONFLUENCE_PAGE_ID  = os.environ.get("CONFLUENCE_PAGE_ID")    # numeric ID
-CONFLUENCE_USER     = os.environ.get("CONFLUENCE_USER")       # Atlassian email
-CONFLUENCE_API_TOKEN= os.environ.get("CONFLUENCE_API_TOKEN")  # Atlassian API token
-SLACK_BOT_TOKEN     = os.environ.get("SLACK_BOT_TOKEN")       # xoxb-...
-SLACK_CHANNEL_ID    = os.environ.get("SLACK_CHANNEL_ID")      # e.g. C0123456789 (or D…/G…)
-SLACK_POST_TO_USER_ID = os.environ.get("SLACK_POST_TO_USER_ID")  # Optional: U… (opens DM via API; needs im:write)
-PARSE_DUMP_ONLY = os.environ.get("PARSE_DUMP_ONLY", "false").lower() in {"1","true","yes"}
+CONFLUENCE_BASE_URL   = os.environ.get("CONFLUENCE_BASE_URL")     # e.g. https://your-domain.atlassian.net/wiki
+CONFLUENCE_PAGE_ID    = os.environ.get("CONFLUENCE_PAGE_ID")      # numeric ID
+CONFLUENCE_USER       = os.environ.get("CONFLUENCE_USER")         # Atlassian email
+CONFLUENCE_API_TOKEN  = os.environ.get("CONFLUENCE_API_TOKEN")    # Atlassian API token
+SLACK_BOT_TOKEN       = os.environ.get("SLACK_BOT_TOKEN")         # xoxb-...
+SLACK_CHANNEL_ID      = os.environ.get("SLACK_CHANNEL_ID")        # C…/G…/D…
+SLACK_POST_TO_USER_ID = os.environ.get("SLACK_POST_TO_USER_ID")   # Optional U… (requires im:write)
+PARSE_DUMP_ONLY       = os.environ.get("PARSE_DUMP_ONLY", "false").lower() in {"1", "true", "yes"}
 
 # Optional: change config path if you want
-CONFIG_PATH         = os.environ.get("CONFIG_PATH", "config.yaml")
+CONFIG_PATH = os.environ.get("CONFIG_PATH", "config.yaml")
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger("presenter-bot")
 
 
-
+# ----------------- Small utils -----------------
 def _strip_accents(s: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    return "".join(c for c in unicodedata.normalize("NFKD", s or "") if not unicodedata.combining(c))
 
 def _norm_key(s: str) -> str:
-    s = _strip_accents(s or "").lower().strip()
-    s = re.sub(r"\s+", " ", s)
-    return s
+    s = _strip_accents(s).lower().strip()
+    return re.sub(r"\s+", " ", s)
+
 
 # ----------------- Config -----------------
 class BotConfig:
@@ -50,15 +50,10 @@ class BotConfig:
         cols = data.get("columns", {}) or {}
         self.col_date = cols.get("date", "date").strip().lower()
         self.col_presenter = cols.get("presenter", "presenter").strip().lower()
-        # topic is parsed (to keep the table shape) but not used in messages
-        self.col_topic = cols.get("topic", "topic").strip().lower()
+        self.col_topic = cols.get("topic", "topic").strip().lower()  # parsed but unused
 
         self.require_at = bool(data.get("require_presenter_at_mention", True))
         self.accept_multiple = bool(data.get("accept_multiple_in_week", False))
-
-        self.slack_user_map = {}
-        for k, v in (data.get("slack_user_map", {}) or {}).items():
-            self.slack_user_map[_norm_key(k)] = v.strip()
 
         # Title + templates
         self.title = data.get("title", ":peepo-chat: SUPER IMPORTANT REMINDER :peepo-chat:")
@@ -73,13 +68,20 @@ class BotConfig:
             "Empty stage this week—use the time to recharge 🔋",
             "No talk this week. Coffee + deep work, anyone? ☕",
         ])
-        # "rotate" | "random" (stable per week) | "random_per_run" (different every run)
+        # "rotate" | "random" (stable per week) | "random_per_run"
         self.template_mode = data.get("template_mode", "rotate")
+
+        # Slack user map (normalized-name -> Slack user ID)
+        self.slack_user_map = {}
+        for k, v in (data.get("slack_user_map", {}) or {}).items():
+            if v:
+                self.slack_user_map[_norm_key(k)] = str(v).strip()
 
     @classmethod
     def load(cls, path: str) -> "BotConfig":
         with open(path, "r", encoding="utf-8") as f:
             return cls(yaml.safe_load(f) or {})
+
 
 def slackify_presenter(label: str, cfg: BotConfig) -> str:
     """
@@ -88,21 +90,22 @@ def slackify_presenter(label: str, cfg: BotConfig) -> str:
     """
     if not label or not label.startswith("@"):
         return label
-    name = label[1:].strip()
-    key = _norm_key(name)
+    # Already a real mention?
+    if re.fullmatch(r"<@[^>]+>", label):
+        return label
+    key = _norm_key(label[1:].strip())
     user_id = cfg.slack_user_map.get(key)
     return f"<@{user_id}>" if user_id else label
 
 
-# ----------------- Guard -----------------
+# ----------------- Guards -----------------
 def require_env():
     missing = [k for k in [
         "CONFLUENCE_BASE_URL", "CONFLUENCE_PAGE_ID",
         "CONFLUENCE_USER", "CONFLUENCE_API_TOKEN",
         "SLACK_BOT_TOKEN"
     ] if not os.environ.get(k)]
-    # SLACK_CHANNEL_ID or SLACK_POST_TO_USER_ID must exist
-    if not os.environ.get("SLACK_CHANNEL_ID") and not os.environ.get("SLACK_POST_TO_USER_ID"):
+    if not (os.environ.get("SLACK_CHANNEL_ID") or os.environ.get("SLACK_POST_TO_USER_ID")):
         missing.append("SLACK_CHANNEL_ID or SLACK_POST_TO_USER_ID")
     if missing:
         raise RuntimeError(f"Missing env vars: {', '.join(missing)}")
@@ -114,7 +117,7 @@ def week_bounds(now: datetime, tzname: str) -> Tuple[datetime, datetime]:
     local_now = now.astimezone(tz)
     monday = local_now - timedelta(days=local_now.weekday())
     start = monday.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = start + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
+    end = start + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999_999)
     return start, end
 
 def day_bounds(now: datetime, tzname: str) -> Tuple[datetime, datetime]:
@@ -124,54 +127,11 @@ def day_bounds(now: datetime, tzname: str) -> Tuple[datetime, datetime]:
     end = start + timedelta(days=1, microseconds=-1)
     return start, end
 
-USER_CACHE = {}
 
-def extract_account_ids(cell_html: str):
-    return re.findall(r'ri:user[^>]+ri:account-id="([^"]+)"', cell_html or "", flags=re.I)
-
-def lookup_user_name(account_id: str) -> Optional[str]:
-    if account_id in USER_CACHE:
-        return USER_CACHE[account_id]
-    url = f"{CONFLUENCE_BASE_URL}/rest/api/user"
-    try:
-        r = requests.get(url, params={"accountId": account_id}, auth=(CONFLUENCE_USER, CONFLUENCE_API_TOKEN))
-        if r.status_code == 200:
-            data = r.json()
-            name = data.get("displayName") or data.get("publicName")
-            if name:
-                USER_CACHE[account_id] = name
-                return name
-    except Exception as e:
-        log.info(f"[diag] user lookup failed for {account_id}: {e}")
-    return None
-
-def presenter_label_from_cell(presenter_text: str, presenter_html: str, require_at: bool) -> Optional[str]:
-    presenter_text = (presenter_text or "").strip()
-    if presenter_text:
-        return presenter_text if not (require_at and not presenter_text.startswith("@")) else f"@{presenter_text}"
-
-    ids = extract_account_ids(presenter_html)
-    if ids:
-        name = lookup_user_name(ids[0])
-        if name:
-            return f"@{name}"
-
-    # optional fallback: alias if present
-    soup = BeautifulSoup(presenter_html or "", "html.parser")
-    alias = soup.find(attrs={"data-linked-resource-default-alias": True})
-    if alias:
-        val = alias.get("data-linked-resource-default-alias")
-        if val:
-            return f"@{val}"
-
-    return None
-
-
-
-# ----------------- Confluence fetch & parse -----------------
+# ----------------- Confluence helpers -----------------
 def fetch_confluence_storage_html() -> str:
     url = f"{CONFLUENCE_BASE_URL}/rest/api/content/{CONFLUENCE_PAGE_ID}?expand=body.storage,version"
-    resp = requests.get(url, auth=(CONFLUENCE_USER, CONFLUENCE_API_TOKEN))
+    resp = requests.get(url, auth=(CONFLUENCE_USER, CONFLUENCE_API_TOKEN), timeout=30)
     if resp.status_code != 200:
         raise RuntimeError(f"Confluence API error {resp.status_code}: {resp.text[:400]}")
     body = resp.json().get("body", {}).get("storage", {}).get("value", "")
@@ -201,6 +161,7 @@ def parse_tables(html: str):
     return tables
 
 def find_header_indexes(header_row: List[Tuple[str, str]], cfg: BotConfig) -> Optional[Tuple[int, int, Optional[int]]]:
+    """Return (date_idx, presenter_idx, topic_idx?) when headers match config (case-insensitive)."""
     lower = [t.strip().lower() for (t, _h) in header_row]
     idx_date = idx_presenter = idx_topic = None
     for i, h in enumerate(lower):
@@ -225,31 +186,28 @@ def parse_date(s: str, tzname: str) -> Optional[datetime]:
         except Exception:
             return None
     tz = pytz.timezone(tzname)
-    if dt.tzinfo is None:
-        dt = tz.localize(dt.replace(hour=0, minute=0, second=0, microsecond=0))
-    else:
-        dt = dt.astimezone(tz)
+    dt = dt.astimezone(tz) if dt.tzinfo else tz.localize(dt.replace(hour=0, minute=0, second=0, microsecond=0))
     return dt
 
 def parse_confluence_date_from_html(cell_html: str, tzname: str) -> Optional[datetime]:
-    """Parse Confluence date either from <span data-node-type='date' data-timestamp='...'> or <time datetime='YYYY-MM-DD'>."""
+    """
+    Parse Confluence date either from <time datetime='YYYY-MM-DD'> or
+    from <span data-node-type='date' data-timestamp='...'>.
+    """
     soup = BeautifulSoup(cell_html or "", "html.parser")
     tz = pytz.timezone(tzname)
 
-    # New: <time datetime="2025-09-25">
+    # <time datetime="2025-09-25">
     t = soup.find("time")
     if t and t.get("datetime"):
         try:
             d = dtparse.parse(t["datetime"])
-            if d.tzinfo is None:
-                d = tz.localize(d.replace(hour=0, minute=0, second=0, microsecond=0))
-            else:
-                d = d.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+            d = d.astimezone(tz) if d.tzinfo else tz.localize(d.replace(hour=0, minute=0, second=0, microsecond=0))
             return d
         except Exception:
             pass
 
-    # Existing: <span data-node-type="date" data-timestamp="...">
+    # <span data-node-type="date" data-timestamp="...">
     span = soup.find(attrs={"data-node-type": "date"})
     ts = span.get("data-timestamp") if span else None
     if ts:
@@ -263,10 +221,53 @@ def parse_confluence_date_from_html(cell_html: str, tzname: str) -> Optional[dat
 
     return None
 
-
 def is_confluence_user_mention(cell_html: str) -> bool:
     h = (cell_html or "").lower()
     return ("ri:user" in h) or ("ri:account-id" in h) or ('data-linked-resource-type="user"' in h)
+
+USER_CACHE: dict = {}
+
+def extract_account_ids(cell_html: str) -> List[str]:
+    return re.findall(r'ri:user[^>]+ri:account-id="([^"]+)"', cell_html or "", flags=re.I)
+
+def lookup_user_name(account_id: str) -> Optional[str]:
+    if account_id in USER_CACHE:
+        return USER_CACHE[account_id]
+    url = f"{CONFLUENCE_BASE_URL}/rest/api/user"
+    try:
+        r = requests.get(url, params={"accountId": account_id}, auth=(CONFLUENCE_USER, CONFLUENCE_API_TOKEN), timeout=20)
+        if r.status_code == 200:
+            data = r.json()
+            name = data.get("displayName") or data.get("publicName")
+            if name:
+                USER_CACHE[account_id] = name
+                return name
+    except Exception as e:
+        log.info(f"[diag] user lookup failed for {account_id}: {e}")
+    return None
+
+def presenter_label_from_cell(presenter_text: str, presenter_html: str, require_at: bool) -> Optional[str]:
+    """Return '@Display Name' if possible (resolves mention macros)."""
+    presenter_text = (presenter_text or "").strip()
+
+    if presenter_text:
+        return presenter_text if (not require_at or presenter_text.startswith("@")) else f"@{presenter_text}"
+
+    ids = extract_account_ids(presenter_html)
+    if ids:
+        name = lookup_user_name(ids[0])
+        if name:
+            return f"@{name}"
+
+    # Optional fallback: some instances include an alias attribute.
+    soup = BeautifulSoup(presenter_html or "", "html.parser")
+    alias = soup.find(attrs={"data-linked-resource-default-alias": True})
+    if alias:
+        val = alias.get("data-linked-resource-default-alias")
+        if val:
+            return f"@{val}"
+
+    return None
 
 
 # ----------------- Schedule extraction -----------------
@@ -279,7 +280,7 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
     DEBUG_LOG = os.environ.get("DEBUG_LOG", "false").lower() in {"1", "true", "yes"}
 
     def infer_indexes_from_table(body_rows: List[List[Tuple[str, str]]]) -> Optional[Tuple[int, int, Optional[int]]]:
-        import re as _re
+        """Heuristics when headers don't match: score columns for date/presenter signals."""
         if not body_rows:
             return None
         max_cols = max((len(r) for r in body_rows if r), default=0)
@@ -288,7 +289,7 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
 
         date_scores = [0] * max_cols
         presenter_scores = [0] * max_cols
-        date_like_re = _re.compile(r"\b(\d{1,2}[-/]\d{1,2}([-/]\d{2,4})?|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", _re.I)
+        date_like_re = re.compile(r"\b(\d{1,2}[-/]\d{1,2}([-/]\d{2,4})?|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", re.I)
 
         for r in body_rows[:50]:
             for ci in range(min(len(r), max_cols)):
@@ -301,7 +302,7 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
                     date_scores[ci] += 4
                 if 'data-node-type="date"' in h or "date-node" in h:
                     date_scores[ci] += 3
-                if _re.search(r'data-timestamp="\d+"', h):
+                if re.search(r'data-timestamp="\d+"', h):
                     date_scores[ci] += 3
                 if date_like_re.search(t):
                     date_scores[ci] += 1
@@ -322,7 +323,7 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
         if not t:
             continue
 
-        header = t[0]         # [(text, html), ...]
+        header = t[0]
         body_rows = t[1:]
 
         idxs = find_header_indexes(header, cfg)
@@ -377,7 +378,7 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
 
             items.append((dt, label or presenter_text))
 
-    # de-dup + sort
+    # De-dup + sort
     uniq = {(d.isoformat(), p): (d, p) for d, p in items}
     out = list(uniq.values())
     out.sort(key=lambda x: x[0])
@@ -402,7 +403,7 @@ def pick_template(cfg: BotConfig, has_presenter: bool, now_local: datetime) -> s
         return random.choice(pool)
 
     if mode == "random":
-        # Stable across the same ISO week number
+        # Stable across same ISO week number
         random.seed(now_local.isocalendar().week)
         return random.choice(pool)
 
@@ -418,22 +419,20 @@ def format_message(entries: List[Tuple[datetime, str]], cfg: BotConfig) -> str:
         body = pick_template(cfg, has_presenter=False, now_local=now_local)
         return f"{cfg.title}\n\n{body}"
 
-    # If multiple in one week, optionally list all or pick the earliest
     if not cfg.accept_multiple:
         entries = entries[:1]
 
     lines = []
     if len(entries) == 1:
         d, p = entries[0]
-        p = slackify_presenter(p, cfg)  
-        date_str = d.strftime('%d %B %Y')  # e.g., 25 September 2025
+        p = slackify_presenter(p, cfg)
+        date_str = d.strftime("%d %B %Y")  # e.g., 25 September 2025
         tmpl = pick_template(cfg, has_presenter=True, now_local=d)
-        body = tmpl.format(presenter=p, date=date_str)
-        lines.append(body)
+        lines.append(tmpl.format(presenter=p, date=date_str))
     else:
         for d, p in entries:
             p = slackify_presenter(p, cfg)
-            date_str = d.strftime('%d %B %Y')
+            date_str = d.strftime("%d %B %Y")
             tmpl = pick_template(cfg, has_presenter=True, now_local=d)
             lines.append(tmpl.format(presenter=p, date=date_str))
 
@@ -465,7 +464,6 @@ def post_to_slack(text: str):
 # ----------------- Diagnostics (optional JSON artifact) -----------------
 def dump_parse_diagnostics(tables, cfg, limit=200, out_path=None):
     rows = []
-    tz = pytz.timezone(cfg.timezone)
 
     for t in tables:
         if not t:
@@ -517,11 +515,6 @@ def dump_parse_diagnostics(tables, cfg, limit=200, out_path=None):
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False, indent=2)
 
-# If missing in your file, include this:
-def extract_account_ids(cell_html: str):
-    import re
-    return re.findall(r'ri:user[^>]+ri:account-id="([^"]+)"', cell_html or "", flags=re.I)
-
 def dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json"):
     """Dump every cell's text/html and parsing signals to a JSON file."""
     payload = []
@@ -534,32 +527,33 @@ def dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json"):
         for ri, row in enumerate(t[1:], start=1):
             row_entry = []
             for ci, (text, html) in enumerate(row):
+                text = text or ""
+                html = html or ""
                 # Signals for debugging
                 date_from_html = parse_confluence_date_from_html(html, cfg.timezone)
                 date_from_text = parse_date(text, cfg.timezone)
+                m = re.search(r'data-timestamp="(\d+)"', html, flags=re.I)
+                ts_ms = int(m.group(1)) if m else None
+
                 row_entry.append({
                     "col_index": ci,
-                    "text": text,
-                    "html_snippet": (html or "")[:600],  # trim to keep artifact manageable
-                    "has_date_node": ('data-node-type="date"' in (html or "")),
-                    "date_ts_ms": (
-                        int(__import__("re").search(r'data-timestamp="(\d+)"', html or "", flags=__import__("re").I).group(1))
-                        if __import__("re").search(r'data-timestamp="(\d+)"', html or "", flags=__import__("re").I) else None
-                    ),
+                    "text": text.strip(),
+                    "html_snippet": html[:600],  # trim to keep artifact manageable
+                    "has_time_tag": ("<time" in html and 'datetime="' in html),
+                    "has_date_node": ('data-node-type="date"' in html),
+                    "date_ts_ms": ts_ms,
                     "parsed_date_iso_html": date_from_html.isoformat() if date_from_html else None,
                     "parsed_date_iso_text": date_from_text.isoformat() if date_from_text else None,
                     "mention_elem": is_confluence_user_mention(html),
                     "account_ids": extract_account_ids(html),
-                    "literal_at": (text or "").strip().startswith("@"),
+                    "literal_at": text.strip().startswith("@"),
                 })
             table_entry["rows"].append(row_entry)
         payload.append(table_entry)
 
-    import json
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, ensure_ascii=False, indent=2)
     log.info(f"[dump] wrote {out_path} (tables={len(payload)})")
-
 
 
 # ----------------- Main -----------------
@@ -576,16 +570,12 @@ def main():
     tz = pytz.timezone(cfg.timezone)
     now = datetime.now(tz)
 
-    # If forcing a specific date (useful for reproducing a known row)
+    # Force a specific date (useful for reproducing a known row)
     if FORCE_DATE_STR:
         forced = dtparse.parse(FORCE_DATE_STR)
-        if forced.tzinfo is None:
-            forced = tz.localize(forced)
-        else:
-            forced = forced.astimezone(tz)
-        now = forced
+        now = forced.astimezone(tz) if forced.tzinfo else tz.localize(forced)
 
-    # Select the time window
+    # Select time window
     if TEST_TODAY_ONLY or FORCE_DATE_STR:
         start, end = day_bounds(now, cfg.timezone)
         log.info(f"Today-only window: {start.date()} [{cfg.timezone}]")
@@ -595,18 +585,19 @@ def main():
 
     # Fetch + parse Confluence page
     html = fetch_confluence_storage_html()
-    tables = parse_tables(html)  # cells as (text, html)
+    tables = parse_tables(html)
 
+    # Dump-only mode: write artifact & exit (no Slack)
     if PARSE_DUMP_ONLY:
         dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json")
         log.info("Dump-only mode: wrote /tmp/confluence_tables_dump.json and exited.")
         return
 
-    # Optional: diagnostics to logs + JSON artifact
+    # Light diagnostics
     if DEBUG_LOG:
         dump_parse_diagnostics(tables, cfg, limit=300, out_path="/tmp/presenter_parse_debug.json")
 
-    # Build schedule from tables (handles date-node + @mentions)
+    # Build schedule (handles <time> + data-node dates and @mentions)
     schedule = extract_schedule(tables, cfg)
 
     if DEBUG_LOG:
