@@ -246,22 +246,13 @@ def is_confluence_user_mention(cell_html: str) -> bool:
 # ----------------- Schedule extraction -----------------
 def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
     """
-    Build a list of (date, presenter_label) from the Confluence tables.
-
-    Requirements / helpers used:
-      - find_header_indexes(header_row, cfg)  # tries exact header match
-      - parse_confluence_date_from_html(cell_html, cfg.timezone)  # handles <time datetime> and data-timestamp
-      - parse_date(text, cfg.timezone)  # fallback text parse
-      - is_confluence_user_mention(cell_html)  # detect ri:user mentions
-      - presenter_label_from_cell(text, html, require_at)  # resolve @Name from mention macro if text is empty
+    Build (date, presenter_label) from Confluence tables.
+    - Dates: prefer HTML (<time datetime> or data-timestamp) then fallback to text.
+    - Presenters: accept literal '@...' OR mention macro; resolve accountId -> display name.
     """
     DEBUG_LOG = os.environ.get("DEBUG_LOG", "false").lower() in {"1", "true", "yes"}
 
     def infer_indexes_from_table(body_rows: List[List[Tuple[str, str]]]) -> Optional[Tuple[int, int, Optional[int]]]:
-        """Heuristic inference when headers don't match:
-           - date col: has <time datetime> or data-timestamp or date-like text
-           - presenter col: has ri:user / account-id or literal @text
-        """
         import re as _re
         if not body_rows:
             return None
@@ -305,12 +296,11 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
         if not t:
             continue
 
-        header = t[0]                     # [(text, html), ...]
-        body_rows = t[1:]                 # list of rows
+        header = t[0]         # [(text, html), ...]
+        body_rows = t[1:]
 
         idxs = find_header_indexes(header, cfg)
         if not idxs:
-            # try to infer if headers didn't match
             idxs = infer_indexes_from_table(body_rows)
             if DEBUG_LOG:
                 ht = [txt for (txt, _h) in header]
@@ -326,7 +316,6 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
             log.info(f"[diag] using columns -> date={idx_date}, presenter={idx_presenter}")
 
         for row in body_rows:
-            # guard short rows
             if max(idx_date, idx_presenter) >= len(row):
                 continue
 
@@ -336,7 +325,7 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
             date_text = (date_text or "").strip()
             presenter_text = (presenter_text or "").strip()
 
-            # is this row "eligible" w.r.t mentions?
+            # Must be a mention (literal '@' or real macro) if require_at=True
             literal_at = presenter_text.startswith("@")
             mention_elem = is_confluence_user_mention(presenter_html)
             if cfg.require_at and not (literal_at or mention_elem):
@@ -344,7 +333,7 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
                     log.info(f"Skip: presenter not a mention -> '{presenter_text}'")
                 continue
 
-            # parse date: prefer HTML (<time datetime> / data-timestamp), fallback to text
+            # Parse date: HTML first (<time> / data-timestamp), else text
             dt = parse_confluence_date_from_html(date_html, cfg.timezone) or parse_date(date_text, cfg.timezone)
             if not dt:
                 if DEBUG_LOG:
@@ -353,7 +342,7 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
                     log.info(f"Skip: unparseable date -> '{date_text}' / html has <time>={has_time}, date-node={has_node}")
                 continue
 
-            # resolve presenter label (handles empty visible text for mentions)
+            # Resolve display label (handles empty visible text for mentions)
             label = presenter_label_from_cell(presenter_text, presenter_html, cfg.require_at)
             if cfg.require_at and not label:
                 if DEBUG_LOG:
