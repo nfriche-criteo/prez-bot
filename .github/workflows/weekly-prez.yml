@@ -2,7 +2,7 @@ name: Weekly Prez Bot
 
 on:
   schedule:
-    # send reminder Monday morning
+    # Monday 08:00 UTC (≈09:00 Paris in winter, ≈10:00 in summer)
     - cron: "00 8 * * 1"
   workflow_dispatch:
     inputs:
@@ -33,8 +33,6 @@ jobs:
       CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
       SLACK_BOT_TOKEN:      ${{ secrets.SLACK_BOT_TOKEN }}
       SLACK_CHANNEL_ID:     ${{ secrets.SLACK_CHANNEL_ID }}
-      # Optional: set U… to open a DM via API (requires im:write scope)
-      SLACK_POST_TO_USER_ID: ${{ secrets.SLACK_POST_TO_USER_ID }}
       CONFIG_PATH:          config.yaml
 
       # Inputs (used when you click "Run workflow")
@@ -51,10 +49,12 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Run bot
         run: python app.py
-      # After "Run bot"
+
+      # Debug/Artifacts
       - name: List /tmp
         if: always()
         run: ls -lah /tmp || true
+
       - name: Upload parse artifacts (if present)
         if: always()
         uses: actions/upload-artifact@v4
@@ -63,11 +63,4 @@ jobs:
           path: |
             /tmp/confluence_tables_dump.json
             /tmp/presenter_parse_debug.json
-          if-no-files-found: ignore
-      - name: Upload parse debug (if present)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: presenter-parse-debug
-          path: /tmp/presenter_parse_debug.json
           if-no-files-found: ignore
