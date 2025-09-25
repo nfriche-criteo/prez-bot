@@ -6,21 +6,21 @@ columns:
 require_presenter_at_mention: true
 accept_multiple_in_week: false
 
-title: ":peepo-chat: SUPER IMPORTANT REMINDER :peepo-chat:"
+title: ":peepo-chat: WEEKLY PREZ :peepo-chat:"
 
 no_presenter_templates:
-  - "No one is presenting this week! Enjoy your freedom while it lasts :evil-laugh:"
-  - "No presentation this week - time to chill :pepezenq:"
-  - "No prez this week. See you later alligators :crocodile:"
+  - "- No one is presenting this week! Enjoy your freedom while it lasts :evil-laugh:"
+  - "- No presentation this week - time to chill :pepezenq:"
+  - "- No prez this week. See you later alligators :crocodile:"
 
 presenter_templates:
-  - "Hope you all had a fabulous weekend! :pepe-periodt: {presenter} is going to make it an even more fabulous week with their prez on {date} :pepehappythumbsup:"
-  - "Well well well... if it isn't the best team PAX has ever seen... :peepo-gold-medal: Buckle up: {presenter} is presenting on {date} :pepe-cowboy:"
-  - "Hola team! {presenter} is getting ready to drop some knowledge bombs on everyone on {date} so get ready :peepo-snack: :yoyo_holding_bomb:"
-  - "Hello beautiful people! :peepo-blow-kiss: Just a reminder that it's showtime for {presenter} on {date} :dance_vibe:"
-  - "Breaking news!! :peepo-alert: This week’s main event: {presenter} on {date}"
-  - "Greetings earthlings :hello-alien: After scanning your primitive calendars, I can confirm {presenter} is presenting on {date}. Prepare for take-off :rocket-1:"
-  - "I will now predict your future :crystal_ball: Yep, just as I thought: you have the incredible privilege of listening to {presenter} present on {date} :napoleon-dynamite-jealous-lucky:"
+  - "- Hope you all had a fabulous weekend! :pepe-periodt: {presenter} is going to make it an even more fabulous week with their prez on {date} :pepehappythumbsup:"
+  - "- Well well well... if it isn't the best team PAX has ever seen... :peepo-gold-medal: Buckle up: {presenter} is presenting on {date} :pepe-cowboy:"
+  - "- Hola team! {presenter} is getting ready to drop some knowledge bombs on everyone on {date} so get ready :peepo-snack: :yoyo_holding_bomb:"
+  - "- Hello beautiful people! :peepo-blow-kiss: Just a reminder that it's showtime for {presenter} on {date} :dance_vibe:"
+  - "- Breaking news!! :peepo-alert: This week’s main event: {presenter} on {date}"
+  - "- Greetings earthlings :hello-alien: After scanning your primitive calendars, I can confirm {presenter} is presenting on {date}. Prepare for take-off :rocket-1:"
+  - "- Hmmm I can sense that your future will be very intriguing :crystal_ball: Ah yes, just as I thought: you have the incredible privilege of listening to {presenter} present on {date} :napoleon-dynamite-jealous-lucky:"
 
 template_mode: "rotate" 
 
