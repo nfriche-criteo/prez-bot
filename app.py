@@ -449,8 +449,9 @@ def main():
     tables = parse_tables(html)  # cells as (text, html)
 
     if PARSE_DUMP_ONLY:
-    dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json")
-    return
+        dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json")
+        log.info("Dump-only mode: wrote /tmp/confluence_tables_dump.json and exited.")
+        return
 
     # Optional: diagnostics to logs + JSON artifact
     if DEBUG_LOG:
