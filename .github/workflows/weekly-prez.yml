@@ -1,0 +1,55 @@
+name: Weekly Prez Bot
+
+on:
+  schedule:
+    # send reminder Monday morning
+    - cron: "00 8 * * 1"
+  workflow_dispatch:
+    inputs:
+      TEST_TODAY_ONLY:
+        description: "Limit selection to today's date? (true/false)"
+        required: false
+        default: "false"
+      FORCE_DATE:
+        description: "Force local date (YYYY-MM-DD) for testing"
+        required: false
+        default: ""
+      DEBUG_LOG:
+        description: "Verbose parse diagnostics and JSON artifact?"
+        required: false
+        default: "false"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      CONFLUENCE_BASE_URL:  ${{ secrets.CONFLUENCE_BASE_URL }}
+      CONFLUENCE_PAGE_ID:   ${{ secrets.CONFLUENCE_PAGE_ID }}
+      CONFLUENCE_USER:      ${{ secrets.CONFLUENCE_USER }}
+      CONFLUENCE_API_TOKEN: ${{ secrets.CONFLUENCE_API_TOKEN }}
+      SLACK_BOT_TOKEN:      ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL_ID:     ${{ secrets.SLACK_CHANNEL_ID }}
+      # Optional: set U… to open a DM via API (requires im:write scope)
+      SLACK_POST_TO_USER_ID: ${{ secrets.SLACK_POST_TO_USER_ID }}
+      CONFIG_PATH:          config.yaml
+
+      # Inputs (used when you click "Run workflow")
+      TEST_TODAY_ONLY: ${{ github.event.inputs.TEST_TODAY_ONLY || 'false' }}
+      FORCE_DATE:      ${{ github.event.inputs.FORCE_DATE || '' }}
+      DEBUG_LOG:       ${{ github.event.inputs.DEBUG_LOG || 'false' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run bot
+        run: python app.py
+      - name: Upload parse debug (if present)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: presenter-parse-debug
+          path: /tmp/presenter_parse_debug.json
+          if-no-files-found: ignore
