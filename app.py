@@ -98,6 +98,49 @@ def day_bounds(now: datetime, tzname: str) -> Tuple[datetime, datetime]:
     end = start + timedelta(days=1, microseconds=-1)
     return start, end
 
+USER_CACHE = {}
+
+def extract_account_ids(cell_html: str):
+    return re.findall(r'ri:user[^>]+ri:account-id="([^"]+)"', cell_html or "", flags=re.I)
+
+def lookup_user_name(account_id: str) -> Optional[str]:
+    if account_id in USER_CACHE:
+        return USER_CACHE[account_id]
+    url = f"{CONFLUENCE_BASE_URL}/rest/api/user"
+    try:
+        r = requests.get(url, params={"accountId": account_id}, auth=(CONFLUENCE_USER, CONFLUENCE_API_TOKEN))
+        if r.status_code == 200:
+            data = r.json()
+            name = data.get("displayName") or data.get("publicName")
+            if name:
+                USER_CACHE[account_id] = name
+                return name
+    except Exception as e:
+        log.info(f"[diag] user lookup failed for {account_id}: {e}")
+    return None
+
+def presenter_label_from_cell(presenter_text: str, presenter_html: str, require_at: bool) -> Optional[str]:
+    presenter_text = (presenter_text or "").strip()
+    if presenter_text:
+        return presenter_text if not (require_at and not presenter_text.startswith("@")) else f"@{presenter_text}"
+
+    ids = extract_account_ids(presenter_html)
+    if ids:
+        name = lookup_user_name(ids[0])
+        if name:
+            return f"@{name}"
+
+    # optional fallback: alias if present
+    soup = BeautifulSoup(presenter_html or "", "html.parser")
+    alias = soup.find(attrs={"data-linked-resource-default-alias": True})
+    if alias:
+        val = alias.get("data-linked-resource-default-alias")
+        if val:
+            return f"@{val}"
+
+    return None
+
+
 
 # ----------------- Confluence fetch & parse -----------------
 def fetch_confluence_storage_html() -> str:
@@ -163,20 +206,37 @@ def parse_date(s: str, tzname: str) -> Optional[datetime]:
     return dt
 
 def parse_confluence_date_from_html(cell_html: str, tzname: str) -> Optional[datetime]:
-    """Use data-timestamp from <span data-node-type="date" data-timestamp="..."> if present."""
+    """Parse Confluence date either from <span data-node-type='date' data-timestamp='...'> or <time datetime='YYYY-MM-DD'>."""
     soup = BeautifulSoup(cell_html or "", "html.parser")
+    tz = pytz.timezone(tzname)
+
+    # New: <time datetime="2025-09-25">
+    t = soup.find("time")
+    if t and t.get("datetime"):
+        try:
+            d = dtparse.parse(t["datetime"])
+            if d.tzinfo is None:
+                d = tz.localize(d.replace(hour=0, minute=0, second=0, microsecond=0))
+            else:
+                d = d.astimezone(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+            return d
+        except Exception:
+            pass
+
+    # Existing: <span data-node-type="date" data-timestamp="...">
     span = soup.find(attrs={"data-node-type": "date"})
     ts = span.get("data-timestamp") if span else None
-    if not ts:
-        return None
-    try:
-        ms = int(ts)
-    except Exception:
-        return None
-    tz = pytz.timezone(tzname)
-    return datetime.fromtimestamp(ms / 1000, tz=pytz.UTC).astimezone(tz).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    if ts:
+        try:
+            ms = int(ts)
+            return datetime.fromtimestamp(ms / 1000, tz=pytz.UTC).astimezone(tz).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+        except Exception:
+            return None
+
+    return None
+
 
 def is_confluence_user_mention(cell_html: str) -> bool:
     h = (cell_html or "").lower()
@@ -185,21 +245,88 @@ def is_confluence_user_mention(cell_html: str) -> bool:
 
 # ----------------- Schedule extraction -----------------
 def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
-    items: List[Tuple[datetime, str]] = []
+    """
+    Build a list of (date, presenter_label) from the Confluence tables.
 
-    DEBUG_LOG = os.environ.get("DEBUG_LOG", "false").lower() in {"1","true","yes"}
+    Requirements / helpers used:
+      - find_header_indexes(header_row, cfg)  # tries exact header match
+      - parse_confluence_date_from_html(cell_html, cfg.timezone)  # handles <time datetime> and data-timestamp
+      - parse_date(text, cfg.timezone)  # fallback text parse
+      - is_confluence_user_mention(cell_html)  # detect ri:user mentions
+      - presenter_label_from_cell(text, html, require_at)  # resolve @Name from mention macro if text is empty
+    """
+    DEBUG_LOG = os.environ.get("DEBUG_LOG", "false").lower() in {"1", "true", "yes"}
+
+    def infer_indexes_from_table(body_rows: List[List[Tuple[str, str]]]) -> Optional[Tuple[int, int, Optional[int]]]:
+        """Heuristic inference when headers don't match:
+           - date col: has <time datetime> or data-timestamp or date-like text
+           - presenter col: has ri:user / account-id or literal @text
+        """
+        import re as _re
+        if not body_rows:
+            return None
+        max_cols = max((len(r) for r in body_rows if r), default=0)
+        if max_cols == 0:
+            return None
+
+        date_scores = [0] * max_cols
+        presenter_scores = [0] * max_cols
+        date_like_re = _re.compile(r"\b(\d{1,2}[-/]\d{1,2}([-/]\d{2,4})?|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", _re.I)
+
+        for r in body_rows[:50]:
+            for ci in range(min(len(r), max_cols)):
+                text, html = r[ci]
+                h = (html or "").lower()
+                t = (text or "")
+
+                # date signals
+                if "<time" in h and 'datetime="' in h:
+                    date_scores[ci] += 4
+                if 'data-node-type="date"' in h or "date-node" in h:
+                    date_scores[ci] += 3
+                if _re.search(r'data-timestamp="\d+"', h):
+                    date_scores[ci] += 3
+                if date_like_re.search(t):
+                    date_scores[ci] += 1
+
+                # presenter signals
+                if ("ri:user" in h) or ("ri:account-id" in h) or ('data-linked-resource-type="user"' in h):
+                    presenter_scores[ci] += 3
+                if t.strip().startswith("@"):
+                    presenter_scores[ci] += 1
+
+        if max(date_scores) == 0 or max(presenter_scores) == 0:
+            return None
+        return date_scores.index(max(date_scores)), presenter_scores.index(max(presenter_scores)), None
+
+    items: List[Tuple[datetime, str]] = []
 
     for t in tables:
         if not t:
             continue
 
-        header = t[0]  # [(text, html), ...]
+        header = t[0]                     # [(text, html), ...]
+        body_rows = t[1:]                 # list of rows
+
         idxs = find_header_indexes(header, cfg)
         if not idxs:
-            continue
-        idx_date, idx_presenter, _idx_topic = idxs
+            # try to infer if headers didn't match
+            idxs = infer_indexes_from_table(body_rows)
+            if DEBUG_LOG:
+                ht = [txt for (txt, _h) in header]
+                log.info(f"[diag] header={ht} -> inferred idxs={idxs}")
 
-        for row in t[1:]:
+        if not idxs:
+            if DEBUG_LOG:
+                log.info("[diag] Could not determine date/presenter columns; skipping table.")
+            continue
+
+        idx_date, idx_presenter, _idx_topic = idxs
+        if DEBUG_LOG:
+            log.info(f"[diag] using columns -> date={idx_date}, presenter={idx_presenter}")
+
+        for row in body_rows:
+            # guard short rows
             if max(idx_date, idx_presenter) >= len(row):
                 continue
 
@@ -209,33 +336,38 @@ def extract_schedule(tables, cfg: BotConfig) -> List[Tuple[datetime, str]]:
             date_text = (date_text or "").strip()
             presenter_text = (presenter_text or "").strip()
 
-            # Accept either literal "@..." OR a real Confluence mention element
+            # is this row "eligible" w.r.t mentions?
             literal_at = presenter_text.startswith("@")
             mention_elem = is_confluence_user_mention(presenter_html)
-
             if cfg.require_at and not (literal_at or mention_elem):
                 if DEBUG_LOG:
                     log.info(f"Skip: presenter not a mention -> '{presenter_text}'")
                 continue
 
-            # Prefer Confluence timestamp; fallback to text parse
+            # parse date: prefer HTML (<time datetime> / data-timestamp), fallback to text
             dt = parse_confluence_date_from_html(date_html, cfg.timezone) or parse_date(date_text, cfg.timezone)
             if not dt:
                 if DEBUG_LOG:
-                    has_date_node = 'data-node-type="date"' in (date_html or "")
-                    log.info(f"Skip: unparseable date -> '{date_text}' / html contains date-node={has_date_node}")
+                    has_time = "<time" in (date_html or "")
+                    has_node = 'data-node-type="date"' in (date_html or "")
+                    log.info(f"Skip: unparseable date -> '{date_text}' / html has <time>={has_time}, date-node={has_node}")
                 continue
 
-            # If it was a real mention but no visible "@", prefix for display
-            if not presenter_text.startswith("@") and mention_elem:
-                presenter_text = f"@{presenter_text}"
+            # resolve presenter label (handles empty visible text for mentions)
+            label = presenter_label_from_cell(presenter_text, presenter_html, cfg.require_at)
+            if cfg.require_at and not label:
+                if DEBUG_LOG:
+                    log.info("Skip: mention present but no resolvable name (accountId lookup failed).")
+                continue
 
-            items.append((dt, presenter_text))
+            items.append((dt, label or presenter_text))
 
+    # de-dup + sort
     uniq = {(d.isoformat(), p): (d, p) for d, p in items}
     out = list(uniq.values())
     out.sort(key=lambda x: x[0])
     return out
+
 
 def pick_for_week(schedule: List[Tuple[datetime, str]], start: datetime, end: datetime) -> List[Tuple[datetime, str]]:
     chosen = [(d, p) for (d, p) in schedule if start <= d <= end]
