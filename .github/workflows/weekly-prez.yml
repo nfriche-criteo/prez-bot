@@ -6,6 +6,10 @@ on:
     - cron: "00 8 * * 1"
   workflow_dispatch:
     inputs:
+      PARSE_DUMP_ONLY:
+        description: "Dump all parsed tables and exit (no Slack)?"
+        required: false
+        default: "false"
       TEST_TODAY_ONLY:
         description: "Limit selection to today's date? (true/false)"
         required: false
@@ -34,6 +38,7 @@ jobs:
       CONFIG_PATH:          config.yaml
 
       # Inputs (used when you click "Run workflow")
+      PARSE_DUMP_ONLY: ${{ github.event.inputs.PARSE_DUMP_ONLY || 'false' }}
       TEST_TODAY_ONLY: ${{ github.event.inputs.TEST_TODAY_ONLY || 'false' }}
       FORCE_DATE:      ${{ github.event.inputs.FORCE_DATE || '' }}
       DEBUG_LOG:       ${{ github.event.inputs.DEBUG_LOG || 'false' }}
