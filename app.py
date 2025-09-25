@@ -23,6 +23,7 @@ CONFLUENCE_API_TOKEN= os.environ.get("CONFLUENCE_API_TOKEN")  # Atlassian API to
 SLACK_BOT_TOKEN     = os.environ.get("SLACK_BOT_TOKEN")       # xoxb-...
 SLACK_CHANNEL_ID    = os.environ.get("SLACK_CHANNEL_ID")      # e.g. C0123456789 (or D…/G…)
 SLACK_POST_TO_USER_ID = os.environ.get("SLACK_POST_TO_USER_ID")  # Optional: U… (opens DM via API; needs im:write)
+PARSE_DUMP_ONLY = os.environ.get("PARSE_DUMP_ONLY", "false").lower() in {"1","true","yes"}
 
 # Optional: change config path if you want
 CONFIG_PATH         = os.environ.get("CONFIG_PATH", "config.yaml")
@@ -367,6 +368,50 @@ def dump_parse_diagnostics(tables, cfg, limit=200, out_path=None):
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(rows, f, ensure_ascii=False, indent=2)
 
+# If missing in your file, include this:
+def extract_account_ids(cell_html: str):
+    import re
+    return re.findall(r'ri:user[^>]+ri:account-id="([^"]+)"', cell_html or "", flags=re.I)
+
+def dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json"):
+    """Dump every cell's text/html and parsing signals to a JSON file."""
+    payload = []
+    for ti, t in enumerate(tables):
+        if not t:
+            continue
+        header_texts = [txt for (txt, _h) in t[0]]
+        table_entry = {"table_index": ti, "header": header_texts, "rows": []}
+
+        for ri, row in enumerate(t[1:], start=1):
+            row_entry = []
+            for ci, (text, html) in enumerate(row):
+                # Signals for debugging
+                date_from_html = parse_confluence_date_from_html(html, cfg.timezone)
+                date_from_text = parse_date(text, cfg.timezone)
+                row_entry.append({
+                    "col_index": ci,
+                    "text": text,
+                    "html_snippet": (html or "")[:600],  # trim to keep artifact manageable
+                    "has_date_node": ('data-node-type="date"' in (html or "")),
+                    "date_ts_ms": (
+                        int(__import__("re").search(r'data-timestamp="(\d+)"', html or "", flags=__import__("re").I).group(1))
+                        if __import__("re").search(r'data-timestamp="(\d+)"', html or "", flags=__import__("re").I) else None
+                    ),
+                    "parsed_date_iso_html": date_from_html.isoformat() if date_from_html else None,
+                    "parsed_date_iso_text": date_from_text.isoformat() if date_from_text else None,
+                    "mention_elem": is_confluence_user_mention(html),
+                    "account_ids": extract_account_ids(html),
+                    "literal_at": (text or "").strip().startswith("@"),
+                })
+            table_entry["rows"].append(row_entry)
+        payload.append(table_entry)
+
+    import json
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    log.info(f"[dump] wrote {out_path} (tables={len(payload)})")
+
+
 
 # ----------------- Main -----------------
 def main():
@@ -402,6 +447,10 @@ def main():
     # Fetch + parse Confluence page
     html = fetch_confluence_storage_html()
     tables = parse_tables(html)  # cells as (text, html)
+
+    if PARSE_DUMP_ONLY:
+    dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json")
+    return
 
     # Optional: diagnostics to logs + JSON artifact
     if DEBUG_LOG:
