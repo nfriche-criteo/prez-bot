@@ -14,6 +14,7 @@ import yaml
 import random
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+import unicodedata
 
 # --------- Required environment variables (set as GitHub Secrets) ----------
 CONFLUENCE_BASE_URL = os.environ.get("CONFLUENCE_BASE_URL")   # e.g. https://your-domain.atlassian.net/wiki
@@ -32,6 +33,15 @@ logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s
 log = logging.getLogger("presenter-bot")
 
 
+
+def _strip_accents(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+
+def _norm_key(s: str) -> str:
+    s = _strip_accents(s or "").lower().strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
 # ----------------- Config -----------------
 class BotConfig:
     def __init__(self, data: dict):
@@ -45,6 +55,10 @@ class BotConfig:
 
         self.require_at = bool(data.get("require_presenter_at_mention", True))
         self.accept_multiple = bool(data.get("accept_multiple_in_week", False))
+
+        self.slack_user_map = {}
+        for k, v in (data.get("slack_user_map", {}) or {}).items():
+            self.slack_user_map[_norm_key(k)] = v.strip()
 
         # Title + templates
         self.title = data.get("title", ":peepo-chat: SUPER IMPORTANT REMINDER :peepo-chat:")
@@ -66,6 +80,18 @@ class BotConfig:
     def load(cls, path: str) -> "BotConfig":
         with open(path, "r", encoding="utf-8") as f:
             return cls(yaml.safe_load(f) or {})
+
+def slackify_presenter(label: str, cfg: BotConfig) -> str:
+    """
+    If label looks like '@Name', try to map it to a Slack mention <@U...>.
+    Falls back to the original label if not found.
+    """
+    if not label or not label.startswith("@"):
+        return label
+    name = label[1:].strip()
+    key = _norm_key(name)
+    user_id = cfg.slack_user_map.get(key)
+    return f"<@{user_id}>" if user_id else label
 
 
 # ----------------- Guard -----------------
@@ -399,12 +425,14 @@ def format_message(entries: List[Tuple[datetime, str]], cfg: BotConfig) -> str:
     lines = []
     if len(entries) == 1:
         d, p = entries[0]
+        p = slackify_presenter(p, cfg)  
         date_str = d.strftime('%d %B %Y')  # e.g., 25 September 2025
         tmpl = pick_template(cfg, has_presenter=True, now_local=d)
         body = tmpl.format(presenter=p, date=date_str)
         lines.append(body)
     else:
         for d, p in entries:
+            p = slackify_presenter(p, cfg)
             date_str = d.strftime('%d %B %Y')
             tmpl = pick_template(cfg, has_presenter=True, now_local=d)
             lines.append(tmpl.format(presenter=p, date=date_str))
