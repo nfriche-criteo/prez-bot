@@ -14,11 +14,12 @@ no_presenter_templates:
   - "No prez this week. See you later alligators :crocodile:"
 
 presenter_templates:
-  - "Hope you all had a fabulous weekend! :pepe-periodt: \n{presenter} is going to make it an even more fabulous week with their prez on {date} :pepehappythumbsup:"
-  - "Well well well... if it isn't the best team PAX has ever seen... :peepo-gold-medal: \nBuckle up: {presenter} is presenting on {date} :turtle-yeehaw:"
+  - "Hope you all had a fabulous weekend! :pepehappythumbsup: \n{presenter} is going to make it an even more fabulous week with their prez on {date} :slay_queen: :pepe-periodt:"
+  - "Well well well... if it isn't the best team PAX has ever seen... :peepo-gold-medal: \nHeads up legends :alerte-generale: : don't miss {presenter}'s presentation on {date} :kermit_excited:"
+  - "Howdy partners :pepe-cowboy: /nSaddle up, {presenter} is presenting on {date}! :turtle-yeehaw:
   - "Hola team! \n{presenter} is getting ready to drop some knowledge bombs on everyone on {date} so get ready :peepo-snack: :yoyo_holding_bomb:"
-  - "Hello beautiful people! :peepo-blow-kiss: \nJust a reminder that it's showtime for {presenter} on {date} :dance_vibe:"
-  - "Breaking news!! :peepo-alert: \nThis week’s main event: {presenter} on {date}"
+  - "Hello beautiful people! :peepo-blow-kiss: \nJust a reminder that it's showtime for {presenter} on {date} :peepo-dj: :dance_vibe:"
+  - "Breaking news!! :peepo-alert: \nThis week’s main event: {presenter} on {date} :peepo-omg:"
   - "Greetings earthlings :hello-alien: \nAfter scanning your primitive calendars, I can confirm {presenter} is presenting on {date}. Prepare for take-off :rocket-1:"
   - "Hmmm I can sense that your future will be very intriguing :crystal_ball: \nAh yes, just as I suspected: you have the incredible privilege of listening to {presenter} present on {date} :napoleon-dynamite-jealous-lucky:"
 
