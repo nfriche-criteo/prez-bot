@@ -60,17 +60,13 @@ When someone joins the team:
      "first last": "U0ABCDEF12"
    ```
 
-   The code normalizes keys (lowercase, strips accents and extra spaces), so `"léo bierent"` and `"leo bierent"` map the same.
-3. Commit the change to the default branch.
-
-> If a mapping is missing, the bot will post `@Name` as plain text (not blue/clickable).
+> If a mapping is missing, the bot will post `@Name` as plain text (not blue/clickable and therefore won't ping that person).
 
 ### 3) Confluence source page
 
 * `CONFLUENCE_PAGE_ID` comes from your Confluence URL, e.g.:
 
   * `https://…/wiki/spaces/SPACE/pages/1795892462/Thursday+Prez+2.0` → page ID `1795892462`.
-* The bot reads the **storage format** via REST and supports both `<time datetime="YYYY-MM-DD">` and the legacy `data-timestamp` date macro.
 
 ---
 
@@ -108,7 +104,7 @@ Artifacts appear on the run page under **Artifacts → parse-artifacts**.
 
 ## Maintenance
 
-* **Confluence API token rotation (IMPORTANT)**
+* **Confluence API token (IMPORTANT)**
 
   * Our Confluence token policy expires tokens **after ~1 year**. When it expires, updates will fail.
   * To refresh: create a new token in Atlassian → update the repo secret **`CONFLUENCE_API_TOKEN`** in **Settings → Secrets and variables → Actions**.
