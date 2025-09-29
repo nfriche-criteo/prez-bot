@@ -3,7 +3,7 @@ name: Weekly Prez Bot
 on:
   schedule:
     # Monday 08:00 UTC (≈09:00 Paris in winter, ≈10:00 in summer)
-    - cron: "00 8 * * 1"
+    - cron: "0 8 * * 1"
   workflow_dispatch:
     inputs:
       PARSE_DUMP_ONLY:
