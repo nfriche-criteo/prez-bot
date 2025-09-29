@@ -4,6 +4,7 @@ on:
   schedule:
     # Monday 08:00 UTC (≈09:00 Paris in winter, ≈10:00 in summer)
     - cron: "0 8 * * 1"
+    - cron: "*/5 * * * *"  # TEMP: every 5 minutes
   workflow_dispatch:
     inputs:
       PARSE_DUMP_ONLY:
