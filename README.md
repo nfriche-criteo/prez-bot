@@ -7,7 +7,7 @@ GitHub Actions bot reads a Confluence table and posts a weekly reminder in PUMA 
 ## What it does
 
 * Runs automatically **every Monday** at **08:00 UTC** (≈ 09:00/10:00 Paris depending on DST).
-* Reads a Confluence page (columns: **Date**, **Presenter**, **Topic**).
+* Reads a Confluence page (which has a table with columns: **Date**, **Presenter**, **Topic**).
 * Picks the row whose **Date** falls in the current week (Mon–Sun). In testing mode it can target **today only**.
 * Posts a Slack message using a **title**, a **blank line**, then a **templated body**. Templates can **rotate** weekly or be picked **randomly**.
 
