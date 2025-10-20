@@ -16,12 +16,17 @@ no_presenter_templates:
 presenter_templates:
   - "Hope you all had a fabulous weekend! :pepehappythumbsup: \n{presenter} is going to make it an even more fabulous week with their prez on {date} :slay_queen: :pepe-periodt:"
   - "Well well well... if it isn't the best team PAX has ever seen... :peepo-gold-medal: \nSpecial info just for you cuties :peepo-cutie: : don't miss {presenter}'s presentation on {date} :kermit_excited:"
-  - "Howdy partners :pepe-cowboy: /nSaddle up, {presenter} is presenting on {date}! :turtle-yeehaw:"
+  - "Howdy partners :pepe-cowboy: \nSaddle up, {presenter} is presenting on {date}! :turtle-yeehaw:"
   - "Hola team! \n{presenter} is getting ready to drop some knowledge bombs on everyone on {date} so get ready :peepo-snack: :yoyo_holding_bomb:"
   - "Hello beautiful people! :peepo-blow-kiss: \nJust a reminder that it's showtime for {presenter} on {date} :peepo-dj: :dance_vibe:"
   - "Breaking news!! :peepo-alert: \nThis week’s main event: {presenter} on {date} :peepo-omg:"
   - "Greetings earthlings :hello-alien: \nAfter scanning your primitive calendars, I can confirm {presenter} is presenting on {date}. Prepare for take-off :rocket-1:"
   - "Hmmm I can sense that your future will be very intriguing... :crystal_ball: \nAh yes, just as I suspected: \nYou have the incredible privilege of listening to {presenter} present on {date} :napoleon-dynamite-jealous-lucky:"
+  - "Knock knock... :pig-hello-door: \nWho’s there? \nIt’s {presenter}!! :omg_monkey: And they're super duper excited to present on {date} :cantwait:"
+  - "Dear esteemed colleagues, :fancypooh: \n \n:breakingnews: The intellectual event of the century is upon us. \n{presenter} will be presenting their genius-ness on {date} :big-brain: :ascendant:"
+  - "Rise and shine team!! :rise_and_shine: \nThe forecast for {date}: \n100% chance of brilliance, courtesy of {presenter} :rainbow_spongebob:"
+  - "Very real, totally legit scientists have confirmed :science_parrot: :\nListening to {presenter} on {date} increases happiness by 237%. :stonks-: :happy:"
+  - "Oh you thought this week couldn’t get any better? :eyebrow_raising_meme: \n:wrong-: {presenter} is presenting on {date}, and it’s gonna be FIREEEEE :peppo_fireman::fire_burning:”
 
 template_mode: "rotate" 
 
