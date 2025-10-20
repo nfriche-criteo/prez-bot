@@ -26,7 +26,7 @@ presenter_templates:
   - "Dear esteemed colleagues, :fancypooh: \n \n:breakingnews: The intellectual event of the century is upon us. \n{presenter} will be presenting their genius-ness on {date} :big-brain: :ascendant:"
   - "Rise and shine team!! :rise_and_shine: \nThe forecast for {date}: \n100% chance of brilliance, courtesy of {presenter} :rainbow_spongebob:"
   - "Very real, totally legit scientists have confirmed :science_parrot: :\nListening to {presenter} on {date} increases happiness by 237%. :stonks-: :happy:"
-  - "Oh you thought this week couldn’t get any better? :eyebrow_raising_meme: \n:wrong-: {presenter} is presenting on {date}, and it’s gonna be FIREEEEE :peppo_fireman::fire_burning:”
+  - "Oh you thought this week couldn’t get any better? :eyebrow_raising_meme: \n:wrong-: {presenter} is presenting on {date}, and it’s gonna be FIREEEEE :peppo_fireman::fire_burning:"
 
 template_mode: "rotate" 
 
