@@ -11,7 +11,7 @@ GitHub Actions bot reads a Confluence table and posts a weekly reminder in PUMA 
 * Picks the row whose **Date** falls in the current week (Mon–Sun). In testing mode it can target **today only**.
 * Posts a Slack message using a **title**, a **blank line**, then a **templated body**. Templates can **rotate** weekly or be picked **randomly**.
 
-If there’s no matching row for the week, it posts one of the "no presenter" messages.
+If there’s no matching row for the week, it posts a message using one of the "no presenter" templates.
 
 ---
 
