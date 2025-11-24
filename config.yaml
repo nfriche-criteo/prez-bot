@@ -27,10 +27,12 @@ presenter_templates:
   - "Rise and shine team!! :rise_and_shine: \nThe forecast for {date}: \n100% chance of brilliance, courtesy of {presenter} :rainbow_spongebob:"
   - "Very real, totally legit scientists have confirmed :science_parrot: :\nListening to {presenter} on {date} increases happiness by 237%. :stonks-: :happy:"
   - "Oh you thought this week couldn’t get any better? :eyebrow_raising_meme: \n:wrong-: {presenter} is presenting on {date}, and it’s gonna be FIREEEEE :peppo_fireman::fire_burning:"
-  - "Dear diary :peepo-note:\n, Today I learned {presenter} is presenting on {date} :luffy-star-struck: \nI have never been this excited in my entire life as a bot :robot-dance::spongebob-excited:\nXOXO"
+  - "Dear diary :peepo-note:,\n Today I learned {presenter} is presenting on {date} :luffy-star-struck: \nI have never been this excited in my entire life as a bot :robot-dance::spongebob-excited:\nXOXO"
   - "On {date}, {presenter} will attempt the impossible :impossible: :\nholding our collective attention for 30 minutes straight!! :peepo-eyes::shocked_scared: \nTune in to witness history :george_washington:"
   - "It’s giving... professional :businesscat: \nIt’s giving... iconic :slay: \nIt’s giving... {presenter} presenting on {date} :queen::pig-sparkle-eyes:"
   - "Once upon a time... :book::fairy::troll: \n{presenter} prepared a presentation for {date} :im_a_pretty_princess: \nAnd it was glorious. \nThe end. :fancy-peepo-happy:"
+  - "Just a quick reminder from HR (me, I’m HR now): :bossbaby: \nAttendance at {presenter}’s session on {date} is absolutely mandatory if you want to be cool :peepo-cool:"
+  - "Update your LinkedIn skills folks: \nAttended {presenter}’s talk on {date}’ counts as professional growth now :linkedin: :business-cat: :je-vois-que-j'ai-affaire-à-un-professionnel: "
 
 template_mode: "rotate" 
 
