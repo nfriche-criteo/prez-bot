@@ -658,7 +658,12 @@ def pick_weekly_pair(cfg: BotConfig, now_local: datetime) -> Optional[Tuple[str,
     _save_json(cfg.pairing_state_path, {
         "week_key": week_key,
         "pair": [a_id, b_id],
-        "remaining": remainin
+        "remaining": remaining,
+        "carry": carry_next,
+        "updated_at": datetime.now(pytz.UTC).isoformat(),
+    })
+
+    return (f"<@{a_id}>", f"<@{b_id}>")
 
 
 
