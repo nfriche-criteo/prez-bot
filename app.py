@@ -77,6 +77,23 @@ class BotConfig:
             if v:
                 self.slack_user_map[_norm_key(k)] = str(v).strip()
 
+        # ----------------- Pairing config -----------------
+        pairing = data.get("pairing", {}) or {}
+        self.pairing_enabled = bool(pairing.get("enabled", True))
+        self.pairing_header = pairing.get("header", ":handshake: 1:1 buddy for the week")
+        self.pairing_line_template = pairing.get("line_template", "{a} ↔ {b}")
+        self.pairing_state_path = pairing.get(
+            "state_path",
+            os.environ.get("PAIRING_STATE_PATH", ".pairing_state.json"),
+        )
+
+        # Pairing users ALWAYS come from slack_user_map
+        self.pairing_user_ids: List[str] = list(dict.fromkeys(self.slack_user_map.values()))
+
+        if len(self.pairing_user_ids) < 2:
+            log.warning("[pairing] Not enough users to generate 1:1 pairs")
+
+
     @classmethod
     def load(cls, path: str) -> "BotConfig":
         with open(path, "r", encoding="utf-8") as f:
@@ -556,6 +573,95 @@ def dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json"):
     log.info(f"[dump] wrote {out_path} (tables={len(payload)})")
 
 
+
+# ----------------- Weekly 1:1 pairing -----------------
+def _load_json(path: str) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f) or {}
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        log.info(f"[pairing] Could not read state file '{path}': {e}")
+        return {}
+
+def _save_json(path: str, data: dict) -> None:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        log.info(f"[pairing] Could not write state file '{path}': {e}")
+
+def _iso_week_key(dt: datetime) -> str:
+    y, w, _ = dt.isocalendar()
+    return f"{y}-W{w:02d}"
+
+def pick_weekly_pair(cfg: BotConfig, now_local: datetime) -> Optional[Tuple[str, str]]:
+    """
+    Pick one random pair per ISO week.
+    - Uses everyone in cfg.pairing_user_ids exactly once per cycle before repeating.
+    - If odd number of users, leftover is carried into next week and paired first.
+    - Stable within the same ISO week (reruns won't change the pair).
+    Returns mentions ("<@U...>", "<@U...>") or None.
+    """
+    if not cfg.pairing_enabled:
+        return None
+
+    eligible = [u for u in (cfg.pairing_user_ids or []) if u]
+    eligible = list(dict.fromkeys(eligible))  # de-dupe
+    if len(eligible) < 2:
+        return None
+
+    state = _load_json(cfg.pairing_state_path)
+    week_key = _iso_week_key(now_local)
+
+    # If already chosen for this week, reuse (stability across reruns)
+    if state.get("week_key") == week_key and isinstance(state.get("pair"), list) and len(state["pair"]) == 2:
+        a, b = state["pair"]
+        if a and b:
+            return (f"<@{a}>", f"<@{b}>")
+
+    carry = state.get("carry")  # user id or None
+    remaining = state.get("remaining") or []
+
+    # Clean/validate against current eligible list
+    if carry and carry not in eligible:
+        carry = None
+    remaining = [u for u in remaining if u in eligible and u != carry]
+
+    # Start a fresh cycle if needed
+    if not remaining:
+        remaining = [u for u in eligible if u != carry]
+        rnd = random.Random(week_key)  # deterministic shuffle seed for this week's draw
+        rnd.shuffle(remaining)
+
+    # Pick first user
+    if carry:
+        a_id = carry
+        carry = None
+    else:
+        a_id = remaining.pop(0)
+
+    # Ensure second user exists; if not, start a new cycle excluding a_id
+    if not remaining:
+        remaining = [u for u in eligible if u != a_id]
+        rnd = random.Random(week_key + ":refill")
+        rnd.shuffle(remaining)
+
+    b_id = remaining.pop(0)
+
+    # If exactly one user remains, carry them to next week
+    carry_next = None
+    if len(remaining) == 1:
+        carry_next = remaining.pop(0)
+
+    _save_json(cfg.pairing_state_path, {
+        "week_key": week_key,
+        "pair": [a_id, b_id],
+        "remaining": remainin
+
+
+
 # ----------------- Main -----------------
 def main():
     require_env()
@@ -613,10 +719,20 @@ def main():
         for d, p in entries:
             log.info(f"[diag] window -> {p} @ {d.strftime('%Y-%m-%d')}")
 
-    # Format + send to Slack
+    # Format weekly presenter message
     message = format_message(entries, cfg)
+
+    # Append weekly 1:1 pairing
+    if cfg.pairing_enabled:
+        pair = pick_weekly_pair(cfg, now_local=now)
+        if pair:
+            a, b = pair
+            message += f"\n\n{cfg.pairing_header}\n" + cfg.pairing_line_template.format(a=a, b=b)
+
+    # Send to Slack
     post_to_slack(message)
     log.info("Posted to Slack.")
+
 
 
 if __name__ == "__main__":
