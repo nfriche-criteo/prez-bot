@@ -6,7 +6,7 @@ The GitHub Actions bot reads a Confluence table and posts a weekly reminder in P
 
 ## What it does
 
-* Runs automatically **every Monday** at **08:00 UTC** (≈ 09:00/10:00 Paris depending on DST).
+* Runs automatically **every Monday** at **08:00 UTC** (≈ 09:00/10:00 Paris depending on DST and Github's mood).
 * Reads a Confluence page (which has a table with columns: **Date**, **Presenter**, **Topic**).
 * Picks the row whose **Date** falls in the current week (Mon–Sun). In testing mode it can target **today only**.
 * Posts a Slack message using a **title**, a **blank line**, then a **templated body**. Templates can **rotate** weekly or be picked **randomly**.
