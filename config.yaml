@@ -39,14 +39,16 @@ template_mode: "rotate"
 slack_user_map:
   "leo bierent": U019L5GRLT0
   "maxime vedelago": U01C73JF89E
-  "solene bercu": USHV4N54K
   "nikita friche": U07UNS0E9GT
   "mehdi zemni": U07QYN88N6M
   "dana almanla": U037WMFQ9TM
   "arnoud vanhuele": U90UFUTN2
-  "hamlet jesse medina ruiz": U1NJ43P3J
   "nicolas fouhety": U08JK40Q86L
-  "karl toto same": U096N5UR8P6
-  "aymeric philippe": U09CYPWA9B6
   "elyas benyamina": U09F1M1MNAH
-  "ying-ting chen": U09TB0K803E
+
+pairing:
+  enabled: true
+  header: ":frenn: 1:1 buddies this week :frenn: "
+  line_template: "{a} ↔ {b}"
+  state_path: ".pairing_state.json"
+
