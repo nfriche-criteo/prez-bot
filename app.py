@@ -574,8 +574,12 @@ def dump_full_tables(tables, cfg, out_path="/tmp/confluence_tables_dump.json"):
 
 
 
+
 # ----------------- Weekly 1:1 pairing -----------------
-def _load_json(path: str) -> dict:
+
+BYE = "__BYE__"
+
+def _load_pairing_state(path: str) -> dict:
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f) or {}
@@ -585,85 +589,115 @@ def _load_json(path: str) -> dict:
         log.info(f"[pairing] Could not read state file '{path}': {e}")
         return {}
 
-def _save_json(path: str, data: dict) -> None:
+def _save_pairing_state(path: str, data: dict) -> None:
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception as e:
         log.info(f"[pairing] Could not write state file '{path}': {e}")
 
-def _iso_week_key(dt: datetime) -> str:
+def _current_week_key(dt: datetime) -> str:
     y, w, _ = dt.isocalendar()
     return f"{y}-W{w:02d}"
 
+def _build_round_robin_schedule(order: List[str]) -> List[Tuple[str, str]]:
+    """
+    Classical round-robin ("circle method") schedule.
+    Returns a flat list of unordered pairs; each unordered pair appears exactly once.
+    """
+    n = len(order)
+    if n < 2:
+        return []
+
+    # For odd n, add a BYE slot (standard trick)
+    if n % 2 == 1:
+        order = order + [BYE]
+        n += 1
+
+    fixed = order[0]
+    others = order[1:]
+    num_rounds = n - 1
+    matches_per_round = n // 2
+
+    rounds: List[List[Tuple[str, str]]] = []
+
+    for _ in range(num_rounds):
+        left = [fixed] + others[:matches_per_round - 1]
+        right = list(reversed(others[matches_per_round - 1:]))
+
+        round_pairs: List[Tuple[str, str]] = []
+        for a, b in zip(left, right):
+            if BYE not in (a, b):
+                round_pairs.append((a, b))
+        rounds.append(round_pairs)
+
+        # rotate "others" around the fixed element
+        others = [others[-1]] + others[:-1]
+
+    # Flatten all rounds into a single deterministic sequence of pairs
+    schedule: List[Tuple[str, str]] = []
+    for rnd in rounds:
+        schedule.extend(rnd)
+    return schedule
+
 def pick_weekly_pair(cfg: BotConfig, now_local: datetime) -> Optional[Tuple[str, str]]:
     """
-    Pick one random pair per ISO week.
-    - Uses everyone in cfg.pairing_user_ids exactly once per cycle before repeating.
-    - If odd number of users, leftover is carried into next week and paired first.
-    - Stable within the same ISO week (reruns won't change the pair).
-    Returns mentions ("<@U...>", "<@U...>") or None.
+    Deterministic single pair per week.
+
+    - Uses a full round-robin schedule over cfg.pairing_user_ids (Slack user IDs).
+    - Each unordered pair {A,B} appears exactly once before repeating the cycle.
+    - Exactly one pair per ISO week.
+    - Stable within a week: rerunning the workflow in the same week returns the same pair.
+
+    Returns Slack mentions ("<@U...>", "<@U...>") or None.
     """
     if not cfg.pairing_enabled:
         return None
 
+    # Unique, non-empty Slack user IDs
     eligible = [u for u in (cfg.pairing_user_ids or []) if u]
-    eligible = list(dict.fromkeys(eligible))  # de-dupe
+    eligible = list(dict.fromkeys(eligible))
     if len(eligible) < 2:
         return None
 
-    state = _load_json(cfg.pairing_state_path)
-    week_key = _iso_week_key(now_local)
+    path = cfg.pairing_state_path
+    state = _load_pairing_state(path)
 
-    # If already chosen for this week, reuse (stability across reruns)
-    if state.get("week_key") == week_key and isinstance(state.get("pair"), list) and len(state["pair"]) == 2:
-        a, b = state["pair"]
-        if a and b:
-            return (f"<@{a}>", f"<@{b}>")
-
-    carry = state.get("carry")  # user id or None
-    remaining = state.get("remaining") or []
-
-    # Clean/validate against current eligible list
-    if carry and carry not in eligible:
-        carry = None
-    remaining = [u for u in remaining if u in eligible and u != carry]
-
-    # Start a fresh cycle if needed
-    if not remaining:
-        remaining = [u for u in eligible if u != carry]
-        rnd = random.Random(week_key)  # deterministic shuffle seed for this week's draw
-        rnd.shuffle(remaining)
-
-    # Pick first user
-    if carry:
-        a_id = carry
-        carry = None
+    # State schema: { "order": [...], "pair_index": int, "last_week": "YYYY-Www" }
+    saved_order = state.get("order")
+    if not isinstance(saved_order, list) or sorted(saved_order) != sorted(eligible):
+        # Roster changed or old schema → reset schedule
+        order = sorted(eligible)
+        state = {
+            "order": order,
+            "pair_index": 0,
+            "last_week": None,
+        }
     else:
-        a_id = remaining.pop(0)
+        order = saved_order
 
-    # Ensure second user exists; if not, start a new cycle excluding a_id
-    if not remaining:
-        remaining = [u for u in eligible if u != a_id]
-        rnd = random.Random(week_key + ":refill")
-        rnd.shuffle(remaining)
+    schedule = _build_round_robin_schedule(order)
+    if not schedule:
+        return None
 
-    b_id = remaining.pop(0)
+    week_key = _current_week_key(now_local)
 
-    # If exactly one user remains, carry them to next week
-    carry_next = None
-    if len(remaining) == 1:
-        carry_next = remaining.pop(0)
+    # If we already picked a pair for this ISO week, return the same one (no advance)
+    if state.get("last_week") == week_key:
+        # Last emitted pair is at index (pair_index - 1) modulo schedule length
+        idx = (state.get("pair_index", 0) - 1) % len(schedule)
+        a_id, b_id = schedule[idx]
+        return f"<@{a_id}>", f"<@{b_id}>"
 
-    _save_json(cfg.pairing_state_path, {
-        "week_key": week_key,
-        "pair": [a_id, b_id],
-        "remaining": remaining,
-        "carry": carry_next,
-        "updated_at": datetime.now(pytz.UTC).isoformat(),
-    })
+    # New week: use current pair_index, then advance for next week
+    idx = state.get("pair_index", 0) % len(schedule)
+    a_id, b_id = schedule[idx]
 
-    return (f"<@{a_id}>", f"<@{b_id}>")
+    state["pair_index"] = (idx + 1) % len(schedule)
+    state["last_week"] = week_key
+    _save_pairing_state(path, state)
+
+    return f"<@{a_id}>", f"<@{b_id}>"
 
 
 
