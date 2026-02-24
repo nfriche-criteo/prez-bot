@@ -43,12 +43,25 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Download pairing state (if any)
+        uses: actions/download-artifact@v4
+        with:
+          name: pairing-state
+          path: .
+        continue-on-error: true
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - name: Run bot
         run: python app.py
+      - name: Upload pairing state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pairing-state
+          path: .pairing_state.json
+          if-no-files-found: ignore
 
       # Debug/Artifacts
       - name: List /tmp
