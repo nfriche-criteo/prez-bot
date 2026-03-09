@@ -1,6 +1,6 @@
 # Weekly Prez Bot 🤖
 
-The GitHub Actions bot reads a Confluence table and posts a weekly reminder in PUMA Slack channel about who is presenting that week.
+The GitHub Actions bot reads a Confluence table and posts a weekly reminder in the PUMA Slack channel about who is presenting that week.
 
 ---
 
