@@ -48,8 +48,5 @@ slack_user_map:
   "yael gossec": U05NLFZ6WFM
 
 pairing:
-  enabled: true
-  header: ":frenn: 1:1 buddies this week :frenn: "
-  line_template: "{a} ↔ {b}"
-  state_path: ".pairing_state.json"
+  enabled: false
 
