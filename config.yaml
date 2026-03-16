@@ -33,6 +33,9 @@ presenter_templates:
   - "Once upon a time... :book::fairy::troll: \n{presenter} prepared a presentation for {date} :im_a_pretty_princess: \nAnd it was glorious. \nThe end. :fancy-peepo-happy:"
   - "Just a quick reminder from HR (me, I’m HR now): :bossbaby: \nAttendance at {presenter}’s session on {date} is absolutely mandatory if you want to be cool :peepo-cool:"
   - "Update your LinkedIn skills folks: \nAttended {presenter}’s talk on {date}’ counts as professional growth now :linkedin: :business-cat: :je-vois-que-j'ai-affaire-à-un-professionnel: "
+  - "The office tea today is SCALDING :drama-marmot: :hot-coffee: \nRumor has it {presenter} is serving hot content on {date}, please sip responsibly :kermit-drinks-tea:"
+  - "Bonjour mes génies préférés :peepo-french: \nClear your agendas, {presenter} is presenting on {date} and it’s gonna be très incroyable :paris-flag:"
+  - "This is your brain before {presenter}’s talk on {date}: :monkey-brain-homer: :peepo-dumb: \nThis is your brain after: :mindexpanding: :bigbrain: :peepo-smart: \nAny questions?"
 
 template_mode: "rotate" 
 
