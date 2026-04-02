@@ -9,9 +9,10 @@ accept_multiple_in_week: false
 title: ":sparkles: WEEKLY PREZ :sparkles:"
 
 no_presenter_templates:
+  - "No presentation this week. \nAnd yet... we persevere. As our fearless leader :michael-k: would say: :accelerate: :fast-track: :stonks:"
+  - "No prez this week :elmo_shrug: \nSee you later alligators :crocodile: :finger-guns:"
+  - "No prez? I'm not sad, are you sad??? <https://www.youtube.com/watch?v=u1ZvPSpLxCg|Everything is totally fine> :windowlook: :peepo-depressed: :peepo-rain: :sad_cat_thumbs_up:"
   - "No one is presenting this week! Enjoy your freedom while it lasts :evil-laugh:"
-  - "No presentation this week - time to chill :pepezenq:"
-  - "No prez this week. See you later alligators :crocodile:"
 
 presenter_templates:
   - "Hope you all had a fabulous weekend! :pepehappythumbsup: \n{presenter} is going to make it an even more fabulous week with their prez on {date} :slay_queen: :pepe-periodt:"
