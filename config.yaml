@@ -37,6 +37,7 @@ presenter_templates:
   - "The office tea today is SCALDING :drama-marmot: :hot-coffee: \nRumor has it {presenter} is serving hot content on {date}, please sip responsibly :kermit-drinks-tea:"
   - "Bonjour mes génies préférés :peepo-french: \nClear your agendas, {presenter} is presenting on {date} and it’s gonna be très incroyable :paris-flag:"
   - "This is your brain before {presenter}’s talk on {date}: :monkey-brain-homer: :peepo-dumb: \nThis is your brain after: :mindexpanding: :bigbrain: :peepo-smart: \nAny questions?"
+  - "Roses are red :anim-rose: \nViolets are blue :blueblob_jump: \nOn {date} :calendar: \n{presenter} is presenting for you :blob_cat_blush:"
 
 template_mode: "rotate" 
 
