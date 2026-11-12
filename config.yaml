@@ -35,6 +35,7 @@ presenter_templates:
   # - "Hear ye, hear ye! :scroll: \nBy decree of the PUMA kingdom :seigneur_manageur:, {presenter} shall present their wisdom before the court on {date} :knight: \nBring forth the commonfolk! :ew_peasants:"
   # - "No pain, no gain. Never skip ~leg~ prez day :anim-flex::gym-warm-up: \nGet those brain muscles warmed up because {presenter} is serving intellectual gains on {date} :siuuu::doge-strong:"
   # - "Once upon a time... :book::fairy::troll: \n{presenter} prepared a presentation for {date} :im_a_pretty_princess: \nAnd it was glorious. \nThe end. :fancy-peepo-happy:"
+  - "Cabin crew, prepare for presentation :peepo-plane: \n{presenter} will be taking off on {date}. \nPlease return your laptops to the upright position and secure your emotional baggage beneath the seat in front of you :seat::luggage:"
   - "Just a quick reminder from HR (me, I’m HR now): :bossbaby: \nAttendance at {presenter}’s session on {date} is absolutely mandatory if you want to be cool :peepo-cool:"
   - "Update your LinkedIn skills folks: \nAttended {presenter}’s talk on {date}’ counts as professional growth now :linkedin: :business-cat: :je-vois-que-j'ai-affaire-à-un-professionnel: "
   # - "The office tea today is SCALDING :drama-marmot: :hot-coffee: \nRumor has it {presenter} is serving hot content on {date}, please sip responsibly :kermit-drinks-tea:"
